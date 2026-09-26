@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	Version        = "0.1.14-dmit.1"
+	Version        = "0.1.14-dmit.2"
 	Provider       = "oai-basispoints"
 	AuthProviderID = "codex"
 	PluginID       = Provider
@@ -110,28 +110,30 @@ type streamChunk struct {
 }
 
 type Config struct {
-	DataDir          string            `yaml:"data_dir" json:"data_dir"`
-	ResponsesURL     string            `yaml:"responses_url" json:"responses_url"`
-	UpstreamModel    string            `yaml:"upstream_model" json:"upstream_model"`
-	Models           []string          `yaml:"models" json:"models"`
-	ModelMappings    map[string]string `yaml:"model_mappings" json:"model_mappings"`
-	TimeoutSeconds   int               `yaml:"timeout_seconds" json:"timeout_seconds"`
-	MaxResponseBytes int               `yaml:"max_response_bytes" json:"max_response_bytes"`
-	AuthMode         string            `yaml:"auth_mode" json:"auth_mode"`
-	AllowedEmails    []string          `yaml:"allowed_emails" json:"allowed_emails"`
-	ToolsVersionID   string            `yaml:"tools_version_id" json:"tools_version_id"`
-	IgnoreFastTier   bool              `yaml:"ignore_fast_tier" json:"ignore_fast_tier"`
+	DataDir                 string            `yaml:"data_dir" json:"data_dir"`
+	ResponsesURL            string            `yaml:"responses_url" json:"responses_url"`
+	UpstreamModel           string            `yaml:"upstream_model" json:"upstream_model"`
+	Models                  []string          `yaml:"models" json:"models"`
+	ModelMappings           map[string]string `yaml:"model_mappings" json:"model_mappings"`
+	TimeoutSeconds          int               `yaml:"timeout_seconds" json:"timeout_seconds"`
+	MaxResponseBytes        int               `yaml:"max_response_bytes" json:"max_response_bytes"`
+	AuthMode                string            `yaml:"auth_mode" json:"auth_mode"`
+	AllowedEmails           []string          `yaml:"allowed_emails" json:"allowed_emails"`
+	ToolsVersionID          string            `yaml:"tools_version_id" json:"tools_version_id"`
+	IgnoreFastTier          bool              `yaml:"ignore_fast_tier" json:"ignore_fast_tier"`
+	DefaultCompactThreshold int               `yaml:"default_compact_threshold" json:"default_compact_threshold"`
 }
 
 func defaultConfig() Config {
 	return Config{
-		DataDir:          "plugins/oai-basispoints-data",
-		ResponsesURL:     DefaultResponsesURL,
-		UpstreamModel:    DefaultUpstreamModel,
-		Models:           []string{DefaultModelID},
-		TimeoutSeconds:   300,
-		MaxResponseBytes: 64 << 20,
-		AuthMode:         "chatgpt",
+		DataDir:                 "plugins/oai-basispoints-data",
+		ResponsesURL:            DefaultResponsesURL,
+		UpstreamModel:           DefaultUpstreamModel,
+		Models:                  []string{DefaultModelID},
+		TimeoutSeconds:          300,
+		MaxResponseBytes:        64 << 20,
+		AuthMode:                "chatgpt",
+		DefaultCompactThreshold: DefaultCompactThreshold,
 	}
 }
 
@@ -171,6 +173,9 @@ func (c *Config) normalize() error {
 	}
 	if c.MaxResponseBytes < 64<<10 || c.MaxResponseBytes > 128<<20 {
 		return fail(400, "invalid_config", "max_response_bytes must be between 64 KiB and 128 MiB")
+	}
+	if c.DefaultCompactThreshold <= 0 {
+		return fail(400, "invalid_config", "default_compact_threshold must be a positive token count")
 	}
 	seen := map[string]bool{}
 	models := make([]string, 0, len(c.Models))

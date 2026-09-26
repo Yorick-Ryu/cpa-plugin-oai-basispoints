@@ -13,6 +13,11 @@ plugins:
       # 不影响 CPA 原生 Codex 路由；默认 false，仍明确拒绝 Fast。
       ignore_fast_tier: false
 
+      # 仅当客户端显式请求 compaction、但省略阈值或阈值为 null 时补齐。
+      # 插件兼容默认值（token 数），不是模型容量或上游默认值；必须为正整数。
+      # 已有明确阈值保持不变；没有压缩策略时不会自动开启压缩。
+      default_compact_threshold: 200000
+
       # Basis Points Responses 接口地址，通常无需修改。
       responses_url: https://bps.openai.com/basispoints/api/responses
 

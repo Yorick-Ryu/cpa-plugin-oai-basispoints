@@ -41,6 +41,7 @@ make build
 
 ## 协议边界
 
+- 客户端显式发送 `context_management: [{"type":"compaction"}]`，且 `compact_threshold` 缺失或为 `null` 时，插件补入 `default_compact_threshold`（默认 200000 token，可配置正整数）。这是插件兼容策略，不是模型容量或上游默认值。客户端明确阈值原样保留；未提供策略、`null` 或空数组不会开启压缩。
 - 上游请求始终带 `Authorization: Bearer <access_token>`、`chatgpt-account-id`、`x-openai-account-id` 和 `x-basispoints-auth-mode: chatgpt`。
 - `turn_id` 按会话和当前用户 turn 稳定生成；工具结果回合只递增 `agent_iteration`，不会把同一 turn 重新当成新计划。
 - 工具中继通过外层 `references: [完整工具名]` 路由，`code` 只承载该工具的载荷：function 工具为参数 JSON 对象，custom 工具为逐字保留的原始文本。不要再套 `{tool,args}` 内层包装；插件不执行其中代码。已有会话的原生历史调用原样回放，新调用按本次注入的协议生成。

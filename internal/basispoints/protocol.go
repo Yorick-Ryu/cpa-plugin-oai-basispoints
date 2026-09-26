@@ -577,7 +577,7 @@ func prepareResponsesBody(source map[string]any, cfg Config) (map[string]any, er
 	// 未指定或为空时省略可选字段，不发送服务端拒绝的空数组。
 	if policy, exists := source["context_management"]; exists && policy != nil {
 		if entries, isArray := policy.([]any); !isArray || len(entries) > 0 {
-			output["context_management"] = policy
+			output["context_management"] = normalizeContextManagement(policy, cfg.DefaultCompactThreshold)
 		}
 	}
 	if cacheKey := explicitConversationKey(source); cacheKey != "" {

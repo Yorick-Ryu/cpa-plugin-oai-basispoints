@@ -238,15 +238,16 @@ func (s *Service) status() map[string]any {
 	stopped := s.stopped
 	s.mu.RUnlock()
 	return map[string]any{
-		"provider":          Provider,
-		"version":           Version,
-		"responses_url":     cfg.ResponsesURL,
-		"upstream_model":    cfg.UpstreamModel,
-		"models":            cfg.Models,
-		"model_mappings":    cfg.ModelMappings,
-		"stopped":           stopped,
-		"reasoning_efforts": []string{"low", "medium", "high", "xhigh", "ultra"},
-		"ignore_fast_tier":  cfg.IgnoreFastTier,
+		"provider":                  Provider,
+		"version":                   Version,
+		"responses_url":             cfg.ResponsesURL,
+		"upstream_model":            cfg.UpstreamModel,
+		"models":                    cfg.Models,
+		"model_mappings":            cfg.ModelMappings,
+		"stopped":                   stopped,
+		"reasoning_efforts":         []string{"low", "medium", "high", "xhigh", "ultra"},
+		"ignore_fast_tier":          cfg.IgnoreFastTier,
+		"default_compact_threshold": cfg.DefaultCompactThreshold,
 	}
 }
 
@@ -269,6 +270,7 @@ func registration(cfg Config) map[string]any {
 				{"Name": "auth_mode", "Type": "string", "Description": "Basis Points authentication mode; normally chatgpt."},
 				{"Name": "tools_version_id", "Type": "string", "Description": "Optional authoritative Basis Points tools catalog version."},
 				{"Name": "ignore_fast_tier", "Type": "boolean", "Description": "Accept Fast/priority as standard service on Basis Points only; does not enable upstream Fast."},
+				{"Name": "default_compact_threshold", "Type": "integer", "Description": "Positive fallback token threshold for explicitly requested compaction with an omitted/null threshold; default 200000. Does not enable compaction when absent."},
 			},
 		},
 		"capabilities": map[string]any{
