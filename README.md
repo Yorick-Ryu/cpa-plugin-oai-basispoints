@@ -61,3 +61,25 @@ make build
 <a href="https://linux.do/">
   <img src="docs/assets/linuxdo.png" alt="LINUX DO 社区" width="360" />
 </a>
+
+## Experimental incremental text draft
+
+The opt-in incremental_text_stream setting (default false) forwards ordinary
+message text as received. Tool calls remain buffered until the complete terminal
+response passes tool-name, argument-schema, call-ID and parallel-call validation.
+Thread-title requests keep the existing buffered path. The incremental path does
+not automatically replay failed requests; client retries still need idempotency
+for tools with side effects. Interrupted streams may have already displayed text.
+
+Draft 0.1.15-stream-draft.4 is based on commit
+70e8f95da694abba90d70fa34e52ce2aa507bbc1 (0.1.14-dmit.6.search.1),
+preserving its JPEG, compaction, title and same-account Alpha Search fixes.
+Validated incremental responses bind Alpha Search before the terminal event is
+delivered. Invalid tool relays retain their 422 error classification across the
+host stream bridge so they do not inadvertently cool the account.
+
+Validate with go test -race ./... and go vet ./... . Earlier draft.3 passed
+isolated CPA HTTP/SSE and WS fixtures, including nine tool/error scenarios;
+those fixture results are not a real-model benchmark or validation of this
+rebased binary. This is a source-only experimental branch, not a production
+deployment.

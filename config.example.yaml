@@ -13,6 +13,9 @@ plugins:
       # 不影响 CPA 原生 Codex 路由；默认 false，仍明确拒绝 Fast。
       ignore_fast_tier: false
 
+      # 实验功能：文本增量转发；工具调用等完整校验后再发送。默认关闭。
+      incremental_text_stream: false
+
       # 为 Basis Points 别名启用同账号 /v1/alpha/search；宿主 force-model-prefix 必须为 false。
       # 先成功完成一次同会话推理；未绑定会话不会切换到其他或 Free 账号。
       # 填写可写 data_dir 可让哈希会话绑定跨热加载保留（有效期 24 小时）。

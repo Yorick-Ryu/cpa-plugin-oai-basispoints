@@ -143,6 +143,15 @@ func (s *Service) execute(raw json.RawMessage, stream bool) (any, error) {
 		return nil, err
 	}
 	if stream {
+		if s.config().IncrementalTextStream {
+			source, sourceErr := executorSource(request)
+			if sourceErr != nil {
+				return nil, sourceErr
+			}
+			if !isThreadTitleRequest(source) {
+				return s.executeIncrementalStream(request, body, credential, source)
+			}
+		}
 		return s.executeStream(request, body, credential)
 	}
 	payload, response, headers, err := s.executeResponse(request, body, credential, false)
@@ -252,6 +261,7 @@ func (s *Service) status() map[string]any {
 		"stopped":                   stopped,
 		"reasoning_efforts":         []string{"low", "medium", "high", "xhigh", "ultra"},
 		"ignore_fast_tier":          cfg.IgnoreFastTier,
+		"incremental_text_stream":   cfg.IncrementalTextStream,
 		"default_compact_threshold": cfg.DefaultCompactThreshold,
 	}
 }
@@ -275,6 +285,7 @@ func registration(cfg Config) map[string]any {
 				{"Name": "max_response_bytes", "Type": "integer", "Description": "Maximum upstream response size."},
 				{"Name": "auth_mode", "Type": "string", "Description": "Basis Points authentication mode; normally chatgpt."},
 				{"Name": "tools_version_id", "Type": "string", "Description": "Optional authoritative Basis Points tools catalog version."},
+				{"Name": "incremental_text_stream", "Type": "boolean", "Description": "EXPERIMENTAL: forward message deltas; buffer tools through terminal validation; no automatic replay."},
 				{"Name": "ignore_fast_tier", "Type": "boolean", "Description": "Accept Fast/priority as standard service on Basis Points only; does not enable upstream Fast."},
 				{"Name": "default_compact_threshold", "Type": "integer", "Description": "Positive fallback token threshold for explicitly requested compaction with an omitted/null threshold; default 200000. Does not enable compaction when absent."},
 			},

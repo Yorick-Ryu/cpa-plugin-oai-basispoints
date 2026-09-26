@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	Version        = "0.1.14-dmit.6.search.1"
+	Version        = "0.1.15-stream-draft.4"
 	Provider       = "oai-basispoints"
 	AuthProviderID = "codex"
 	PluginID       = Provider
@@ -110,6 +110,7 @@ type streamChunk struct {
 }
 
 type Config struct {
+	IncrementalTextStream   bool              `yaml:"incremental_text_stream" json:"incremental_text_stream"`
 	AlphaSearchSameAccount  bool              `yaml:"alpha_search_same_account" json:"alpha_search_same_account"`
 	DataDir                 string            `yaml:"data_dir" json:"data_dir"`
 	ResponsesURL            string            `yaml:"responses_url" json:"responses_url"`
