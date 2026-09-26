@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	Version        = "0.1.15-stream-draft.4"
+	Version        = "0.1.15-stream-draft.4.images.2"
 	Provider       = "oai-basispoints"
 	AuthProviderID = "codex"
 	PluginID       = Provider

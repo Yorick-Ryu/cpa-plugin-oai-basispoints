@@ -120,15 +120,63 @@ func attachmentURL(responsesURL string) (string, error) {
 	return base.ResolveReference(&url.URL{Path: "attachments"}).String(), nil
 }
 
+// Basis Points accepts attachment references in user messages and custom tool
+// results, but rejects images inside native function results. Keep the result's
+// text and call identity, and place its images immediately afterwards. Positional
+// markers retain the association with surrounding tool text without re-encoding
+// or dropping any image data.
+func normalizeFunctionOutputImages(body map[string]any) {
+	items, ok := body["input"].([]any)
+	if !ok {
+		return
+	}
+	result := make([]any, 0, len(items))
+	for _, value := range items {
+		item := objectValue(value)
+		parts, _ := item["output"].([]any)
+		if stringValue(item["type"]) != "function_call_output" || len(parts) == 0 {
+			result = append(result, value)
+			continue
+		}
+		var images []any
+		output := make([]any, 0, len(parts))
+		for _, value := range parts {
+			part := objectValue(value)
+			if stringValue(part["type"]) != "input_image" {
+				output = append(output, value)
+				continue
+			}
+			images = append(images, cloneObject(part))
+			output = append(output, map[string]any{"type": "input_text", "text": fmt.Sprintf("[Tool result image %d is attached in the following message.]", len(images))})
+		}
+		if len(images) == 0 {
+			result = append(result, value)
+			continue
+		}
+		copy := cloneObject(item)
+		copy["output"] = output
+		attachments := messageItem("user", fmt.Sprintf("Image attachments from tool result call_id=%s, in the same order as the numbered markers in that result.", stringValue(item["call_id"])))
+		attachments["content"] = append(attachments["content"].([]any), images...)
+		result = append(result, copy, attachments)
+	}
+	body["input"] = result
+}
+
 func (s *Service) uploadInputImages(request ExecutorRequest, body map[string]any, c credential, cfg Config) error {
 	items, _ := body["input"].([]any)
 	for i, value := range items {
 		item := objectValue(value)
 		itemType := stringValue(item["type"])
-		if stringValue(item["role"]) != "user" || (itemType != "" && itemType != "message") {
-			continue
+		field := "content"
+		switch itemType {
+		case "function_call_output", "custom_tool_call_output":
+			field = "output"
+		default:
+			if stringValue(item["role"]) != "user" || (itemType != "" && itemType != "message") {
+				continue
+			}
 		}
-		parts, _ := item["content"].([]any)
+		parts, _ := item[field].([]any)
 		var updated []any
 		for j, value := range parts {
 			part := objectValue(value)
@@ -171,7 +219,7 @@ func (s *Service) uploadInputImages(request ExecutorRequest, body map[string]any
 		}
 		if updated != nil {
 			copy := cloneObject(item)
-			copy["content"] = updated
+			copy[field] = updated
 			items[i] = copy
 		}
 	}

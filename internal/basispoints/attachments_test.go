@@ -310,7 +310,8 @@ func TestImageUploadPreservesOtherInputKinds(t *testing.T) {
 			map[string]any{"type": "input_image", "file_id": "file-existing", "detail": "high"},
 			map[string]any{"type": "input_image", "image_url": "https://example.test/image.png", "detail": "auto"},
 		}},
-		map[string]any{"type": "function_call_output", "output": []any{map[string]any{"type": "input_image", "image_url": dataURL}}},
+		map[string]any{"type": "function_call_output", "output": []any{map[string]any{"type": "input_image", "file_id": "file-existing"}, map[string]any{"type": "input_image", "image_url": "https://example.test/image.png"}}},
+		map[string]any{"type": "custom_tool_call_output", "output": "text-only result"},
 		map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "input_image", "image_url": dataURL}}},
 	}}
 	before := string(jsonBytes(source))

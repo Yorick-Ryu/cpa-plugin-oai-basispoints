@@ -41,7 +41,8 @@ func (s *Service) prepareRequest(request ExecutorRequest) (map[string]any, crede
 	if err != nil {
 		return nil, credential{}, err
 	}
-	// 先按原始图片计算会话标识，再替换附件引用，避免上传 ID 改变 task/turn。
+	// Compute conversation identity before adapting tool images or attachment IDs.
+	normalizeFunctionOutputImages(prepared)
 	if err := s.uploadInputImages(request, prepared, c, cfg); err != nil {
 		return nil, credential{}, err
 	}
@@ -219,15 +220,20 @@ func upstreamRequestError(status int, raw []byte, body map[string]any, c credent
 		}
 	}
 	message := redactTokenMessage(errorMessage([]byte(redacted)))
-	images, originalDetails := 0, 0
+	images, toolImages, originalDetails := 0, 0, 0
 	items, _ := body["input"].([]any)
 	for _, value := range items {
-		parts, _ := objectValue(value)["content"].([]any)
-		for _, part := range parts {
-			if stringValue(objectValue(part)["type"]) == "input_image" {
-				images++
-				if stringValue(objectValue(part)["detail"]) == "original" {
-					originalDetails++
+		for _, field := range []string{"content", "output"} {
+			parts, _ := objectValue(value)[field].([]any)
+			for _, part := range parts {
+				if stringValue(objectValue(part)["type"]) == "input_image" {
+					images++
+					if field == "output" {
+						toolImages++
+					}
+					if stringValue(objectValue(part)["detail"]) == "original" {
+						originalDetails++
+					}
 				}
 			}
 		}
@@ -241,5 +247,5 @@ func upstreamRequestError(status int, raw []byte, body map[string]any, c credent
 			tier = "invalid"
 		}
 	}
-	return fail(status, "upstream_error", fmt.Sprintf("Basis Points HTTP %d: %s (reasoning_effort=%s; service_tier=%s; input_images=%d; original_detail_images=%d; %s)", status, message, stringValue(body["reasoning_effort"]), tier, images, originalDetails, requestShape(body)))
+	return fail(status, "upstream_error", fmt.Sprintf("Basis Points HTTP %d: %s (reasoning_effort=%s; service_tier=%s; input_images=%d; tool_output_images=%d; original_detail_images=%d; %s)", status, message, stringValue(body["reasoning_effort"]), tier, images, toolImages, originalDetails, requestShape(body)))
 }

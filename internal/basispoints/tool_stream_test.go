@@ -128,9 +128,15 @@ func TestExecutorNativeToolRoundTrip(t *testing.T) {
 					service := NewService()
 					closed := make(chan map[string]any, 1)
 					var emitted []byte
+					uploadCalls := 0
 					service.SetHost(func(method string, payload any, out any) error {
 						switch method {
 						case "host.http.do", "host.http.do_stream":
+							if strings.HasSuffix(payload.(map[string]any)["url"].(string), "/attachments") {
+								uploadCalls++
+								*out.(*upstreamResponse) = upstreamResponse{StatusCode: 200, Body: jsonBytes(map[string]any{"openai_file_id": "file-roundtrip-image"})}
+								return nil
+							}
 							var wire map[string]any
 							if err := json.Unmarshal(payload.(map[string]any)["body"].([]byte), &wire); err != nil {
 								return err
@@ -189,7 +195,8 @@ func TestExecutorNativeToolRoundTrip(t *testing.T) {
 					if call["namespace"] != "mcp__node_repl" || call["name"] != "js" {
 						t.Fatalf("executor lost tool routing: %#v", call)
 					}
-					image := []any{map[string]any{"type": "input_image", "image_url": "data:image/png;base64,dGVzdA=="}}
+					dataURL, _ := testImageDataURL(t)
+					image := []any{map[string]any{"type": "input_image", "image_url": dataURL}}
 					resultType := "function_call_output"
 					if toolType == "custom" {
 						resultType = "custom_tool_call_output"
@@ -201,8 +208,12 @@ func TestExecutorNativeToolRoundTrip(t *testing.T) {
 						t.Fatal(err)
 					}
 					history := prepared["input"].([]any)
-					if !reflect.DeepEqual(history[len(history)-2], native) || !reflect.DeepEqual(objectValue(history[len(history)-1])["output"], image) {
-						t.Fatalf("next request lost native identity or image result: %#v", history[len(history)-2:])
+					uploadedImage := []any{map[string]any{"type": "input_image", "file_id": "file-roundtrip-image", "detail": "auto"}}
+					output := objectValue(history[len(history)-2])
+					attached := objectValue(history[len(history)-1])
+					content := attached["content"].([]any)
+					if uploadCalls != 1 || !reflect.DeepEqual(history[len(history)-3], native) || output["call_id"] != call["call_id"] || attached["role"] != "user" || !reflect.DeepEqual(content[1:], uploadedImage) {
+						t.Fatalf("next request lost native identity or image result: %#v", history[len(history)-3:])
 					}
 				})
 			}
