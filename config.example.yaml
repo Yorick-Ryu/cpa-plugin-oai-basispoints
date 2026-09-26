@@ -43,6 +43,10 @@ plugins:
       # 不要在这里填写 access_token、refresh_token 或其他密钥。
       auth_mode: chatgpt
 
+      # 可选：只为这些邮箱生成 Basis Points 虚拟认证；原生 Codex 认证仍保留。
+      # 留空时保持旧行为，所有可解析的 Codex OAuth 账号都会进入插件池。
+      allowed_emails: []
+
       # 可选：权威 Basis Points 工具目录版本 ID。默认留空，不发送版本标识。
       # 仅在已取得确切版本 ID 时填写，不要自行编造。
       tools_version_id: ""

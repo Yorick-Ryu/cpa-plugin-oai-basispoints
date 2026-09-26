@@ -95,7 +95,7 @@ func (s *Service) Handle(method string, raw json.RawMessage) (any, error) {
 	case "executor.identifier":
 		return map[string]any{"identifier": Provider}, nil
 	case "auth.parse":
-		return authParse(raw)
+		return authParseWithAllowedEmails(raw, s.config().AllowedEmails)
 	case "auth.login.start":
 		return nil, fail(400, "login_unavailable", "Import an existing CPA codex OAuth credential; interactive login is not used")
 	case "auth.login.poll":

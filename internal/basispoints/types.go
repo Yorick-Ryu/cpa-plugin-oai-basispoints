@@ -118,6 +118,7 @@ type Config struct {
 	TimeoutSeconds   int               `yaml:"timeout_seconds" json:"timeout_seconds"`
 	MaxResponseBytes int               `yaml:"max_response_bytes" json:"max_response_bytes"`
 	AuthMode         string            `yaml:"auth_mode" json:"auth_mode"`
+	AllowedEmails    []string          `yaml:"allowed_emails" json:"allowed_emails"`
 	ToolsVersionID   string            `yaml:"tools_version_id" json:"tools_version_id"`
 }
 
@@ -153,6 +154,17 @@ func (c *Config) normalize() error {
 	if c.AuthMode == "" {
 		c.AuthMode = "chatgpt"
 	}
+	var allowed []string
+	allowedSeen := make(map[string]bool, len(c.AllowedEmails))
+	for _, email := range c.AllowedEmails {
+		email = strings.ToLower(strings.TrimSpace(email))
+		if email == "" || allowedSeen[email] {
+			continue
+		}
+		allowedSeen[email] = true
+		allowed = append(allowed, email)
+	}
+	c.AllowedEmails = allowed
 	if c.TimeoutSeconds < 10 || c.TimeoutSeconds > 1800 {
 		return fail(400, "invalid_config", "timeout_seconds must be between 10 and 1800")
 	}
@@ -196,6 +208,7 @@ func (c *Config) normalize() error {
 
 func (c Config) clone() Config {
 	c.Models = append([]string(nil), c.Models...)
+	c.AllowedEmails = append([]string(nil), c.AllowedEmails...)
 	c.ModelMappings = maps.Clone(c.ModelMappings)
 	return c
 }

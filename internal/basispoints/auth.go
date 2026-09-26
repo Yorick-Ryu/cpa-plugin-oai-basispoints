@@ -291,6 +291,10 @@ func codexPlanType(raw []byte, accessToken string) string {
 }
 
 func authParse(raw []byte) (map[string]any, error) {
+	return authParseWithAllowedEmails(raw, nil)
+}
+
+func authParseWithAllowedEmails(raw []byte, allowedEmails []string) (map[string]any, error) {
 	var request authParseRequest
 	if err := json.Unmarshal(raw, &request); err != nil {
 		return nil, err
@@ -309,6 +313,25 @@ func authParse(raw []byte) (map[string]any, error) {
 			return nil, err
 		}
 		return map[string]any{"Handled": false}, nil
+	}
+	if len(allowedEmails) > 0 {
+		allowed := false
+		for _, email := range allowedEmails {
+			if strings.EqualFold(strings.TrimSpace(email), strings.TrimSpace(c.Email)) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			if provider == Provider {
+				return map[string]any{"Handled": true, "Auths": []any{}}, nil
+			}
+			native, err := nativeCodexAuthData(request.RawJSON, fileName, c)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"Handled": true, "Auth": native}, nil
+		}
 	}
 	virtual := authData(request.RawJSON, fileName, c)
 	if provider == Provider {
