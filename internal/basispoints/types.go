@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	Version        = "0.1.14"
+	Version        = "0.1.14-dmit.1"
 	Provider       = "oai-basispoints"
 	AuthProviderID = "codex"
 	PluginID       = Provider
@@ -120,6 +120,7 @@ type Config struct {
 	AuthMode         string            `yaml:"auth_mode" json:"auth_mode"`
 	AllowedEmails    []string          `yaml:"allowed_emails" json:"allowed_emails"`
 	ToolsVersionID   string            `yaml:"tools_version_id" json:"tools_version_id"`
+	IgnoreFastTier   bool              `yaml:"ignore_fast_tier" json:"ignore_fast_tier"`
 }
 
 func defaultConfig() Config {

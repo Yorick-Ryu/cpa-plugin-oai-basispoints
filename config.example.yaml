@@ -9,6 +9,10 @@ plugins:
       # 启用本插件。插件 ID 固定为 oai-basispoints，请勿随意改名。
       enabled: true
 
+      # 仅本插件：将 fast/priority 请求按标准档执行，不向上游发送 service_tier。
+      # 不影响 CPA 原生 Codex 路由；默认 false，仍明确拒绝 Fast。
+      ignore_fast_tier: false
+
       # Basis Points Responses 接口地址，通常无需修改。
       responses_url: https://bps.openai.com/basispoints/api/responses
 

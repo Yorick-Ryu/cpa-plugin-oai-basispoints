@@ -534,9 +534,12 @@ func prepareResponsesBody(source map[string]any, cfg Config) (map[string]any, er
 	if previous, exists := source["previous_response_id"]; exists && previous != nil {
 		return nil, fail(400, "unsupported_continuation", "oai-basispoints does not support previous_response_id; omit it and send the complete input history, including tool calls and results")
 	}
-	// 已验证的上游普通模式不接受 service_tier，不能将 Fast 静默降级。
+	// Basis Points does not accept service_tier upstream. An explicit plugin
+	// option permits Fast requests to use standard service on this route only.
 	if tier := source["service_tier"]; tier != nil && tier != "auto" && tier != "default" {
-		return nil, fail(400, "unsupported_service_tier", "oai-basispoints supports only the standard service tier; omit service_tier or use auto/default; Fast/priority is not supported")
+		if !cfg.IgnoreFastTier || (tier != "fast" && tier != "priority") {
+			return nil, fail(400, "unsupported_service_tier", "oai-basispoints supports only the standard service tier; omit service_tier or use auto/default; Fast/priority is not supported")
+		}
 	}
 	model := stringValue(source["model"])
 	upstream, ok := cfg.resolveUpstreamModel(model)

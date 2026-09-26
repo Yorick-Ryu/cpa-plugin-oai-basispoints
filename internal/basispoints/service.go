@@ -246,6 +246,7 @@ func (s *Service) status() map[string]any {
 		"model_mappings":    cfg.ModelMappings,
 		"stopped":           stopped,
 		"reasoning_efforts": []string{"low", "medium", "high", "xhigh", "ultra"},
+		"ignore_fast_tier":  cfg.IgnoreFastTier,
 	}
 }
 
@@ -267,6 +268,7 @@ func registration(cfg Config) map[string]any {
 				{"Name": "max_response_bytes", "Type": "integer", "Description": "Maximum upstream response size."},
 				{"Name": "auth_mode", "Type": "string", "Description": "Basis Points authentication mode; normally chatgpt."},
 				{"Name": "tools_version_id", "Type": "string", "Description": "Optional authoritative Basis Points tools catalog version."},
+				{"Name": "ignore_fast_tier", "Type": "boolean", "Description": "Accept Fast/priority as standard service on Basis Points only; does not enable upstream Fast."},
 			},
 		},
 		"capabilities": map[string]any{
