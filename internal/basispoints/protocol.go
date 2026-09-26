@@ -552,6 +552,11 @@ func prepareResponsesBody(source map[string]any, cfg Config) (map[string]any, er
 	if instructions := stringValue(source["instructions"]); instructions != "" {
 		prologue = append(prologue, messageItem("developer", instructions))
 	}
+	if isThreadTitleRequest(source) {
+		// Basis Points rejects Responses text.format. Ask for a short title in
+		// plain text, then restore the requested JSON shape on the way back.
+		prologue = append(prologue, messageItem("developer", "Return only a short conversation title as plain text. Do not add quotation marks or commentary."))
+	}
 	prologue = append(prologue, messageItem("developer", clientToolProtocolInstructions(source)))
 	if reminder := clientToolProtocolReminder(source); reminder != "" {
 		prologue = append(prologue, messageItem("developer", reminder))
@@ -830,6 +835,12 @@ func transformResponseBody(body []byte, source map[string]any) ([]byte, map[stri
 		return nil, nil, false, fail(502, "invalid_upstream_response", "Basis Points returned trailing response data")
 	}
 	output, _ := response["output"].([]any)
+	if isThreadTitleRequest(source) {
+		if err := formatThreadTitleResponse(response, output); err != nil {
+			return nil, nil, false, err
+		}
+		body = jsonBytes(response)
+	}
 	specs := callableClientToolSpecs(source)
 	replaced := make([]any, 0, len(output))
 	natives := make([]map[string]any, 0)
@@ -867,6 +878,58 @@ func transformResponseBody(body []byte, source map[string]any) ([]byte, map[stri
 	}
 	response["output"] = replaced
 	return jsonBytes(response), response, true, nil
+}
+
+func isThreadTitleRequest(source map[string]any) bool {
+	text := objectValue(source["text"])
+	format := objectValue(text["format"])
+	if stringValue(format["type"]) != "json_schema" || stringValue(format["name"]) != "thread_title" {
+		return false
+	}
+	schema := objectValue(format["schema"])
+	properties := objectValue(schema["properties"])
+	title := objectValue(properties["title"])
+	required, ok := schema["required"].([]any)
+	return stringValue(schema["type"]) == "object" && len(properties) == 1 &&
+		stringValue(title["type"]) == "string" && ok && len(required) == 1 && required[0] == "title"
+}
+
+func formatThreadTitleResponse(response map[string]any, output []any) error {
+	var part map[string]any
+	var raw string
+	for _, value := range output {
+		item := objectValue(value)
+		if stringValue(item["type"]) != "message" || stringValue(item["role"]) != "assistant" {
+			continue
+		}
+		content, _ := item["content"].([]any)
+		for _, value := range content {
+			candidate := objectValue(value)
+			if stringValue(candidate["type"]) != "output_text" {
+				continue
+			}
+			if part != nil {
+				return fail(502, "invalid_title_response", "Basis Points returned multiple title text parts")
+			}
+			part = candidate
+			raw = stringValue(candidate["text"])
+		}
+	}
+	if part == nil {
+		return fail(502, "invalid_title_response", "Basis Points did not return a title")
+	}
+	title := strings.TrimSpace(raw)
+	var parsed map[string]any
+	if json.Unmarshal([]byte(title), &parsed) == nil && len(parsed) == 1 {
+		if value, ok := parsed["title"].(string); ok {
+			title = strings.TrimSpace(value)
+		}
+	}
+	if title == "" {
+		return fail(502, "invalid_title_response", "Basis Points returned an empty title")
+	}
+	part["text"] = string(jsonBytes(map[string]any{"title": title}))
+	return nil
 }
 
 func syntheticStream(response map[string]any) []byte {
