@@ -18,6 +18,8 @@ type Service struct {
 	cfg            Config
 	host           HostCall
 	stopped        bool
+	streams        map[*runningStream]struct{}
+	streamWG       sync.WaitGroup
 }
 
 func NewService() *Service {
@@ -88,6 +90,7 @@ func (s *Service) Handle(method string, raw json.RawMessage) (any, error) {
 		}
 		return registration(s.config()), nil
 	case "plugin.quiesce":
+		s.stopStreams()
 		return map[string]any{}, nil
 	case "auth.identifier":
 		// CPA 按这个标识把文件认证交给插件解析；Basis Points 使用
@@ -118,9 +121,7 @@ func (s *Service) Handle(method string, raw json.RawMessage) (any, error) {
 	case "executor.http_request":
 		return nil, fail(400, "unsupported_method", "use the Basis Points model executor")
 	case "plugin.shutdown":
-		s.mu.Lock()
-		s.stopped = true
-		s.mu.Unlock()
+		s.stopStreams()
 		return map[string]any{}, nil
 	default:
 		return nil, fail(400, "unsupported_method", "unsupported plugin method: "+method)
@@ -143,18 +144,9 @@ func (s *Service) execute(raw json.RawMessage, stream bool) (any, error) {
 		return nil, err
 	}
 	if stream {
-		if s.config().IncrementalTextStream {
-			source, sourceErr := executorSource(request)
-			if sourceErr != nil {
-				return nil, sourceErr
-			}
-			if !isThreadTitleRequest(source) {
-				return s.executeIncrementalStream(request, body, credential, source)
-			}
-		}
 		return s.executeStream(request, body, credential)
 	}
-	payload, response, headers, err := s.executeResponse(request, body, credential, false)
+	payload, response, headers, err := s.executeResponse(request, body, credential)
 	if err != nil {
 		return nil, err
 	}
@@ -165,31 +157,17 @@ func (s *Service) execute(raw json.RawMessage, stream bool) (any, error) {
 }
 
 // 在交付任何客户端数据前完成全量校验，畸形调用只允许重生成一次。
-func (s *Service) executeResponse(request ExecutorRequest, body map[string]any, credential credential, stream bool) ([]byte, map[string]any, http.Header, error) {
+func (s *Service) executeResponse(request ExecutorRequest, body map[string]any, credential credential) ([]byte, map[string]any, http.Header, error) {
 	source, err := executorSource(request)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		var raw []byte
-		var headers http.Header
-		if stream {
-			upstream, openErr := s.upstreamStream(request, body, credential)
-			if openErr != nil {
-				return nil, nil, nil, openErr
-			}
-			headers = upstream.Headers
-			raw, err = s.readUpstreamStream(upstream)
-		} else {
-			upstream, openErr := s.upstreamRequest(request, body, credential, false)
-			if openErr != nil {
-				return nil, nil, nil, openErr
-			}
-			headers, raw = upstream.Headers, upstream.Body
+		upstream, openErr := s.upstreamRequest(request, body, credential, false)
+		if openErr != nil {
+			return nil, nil, nil, openErr
 		}
-		if err != nil {
-			return nil, nil, nil, err
-		}
+		headers, raw := upstream.Headers, upstream.Body
 		if len(raw) > s.config().MaxResponseBytes {
 			return nil, nil, nil, fail(502, "upstream_response_too_large", "Basis Points response exceeds configured limit")
 		}
@@ -222,28 +200,6 @@ func (s *Service) executeResponse(request ExecutorRequest, body map[string]any, 
 		body = retry
 	}
 	return nil, nil, nil, relayError("retry_exhausted")
-}
-
-func (s *Service) executeStream(request ExecutorRequest, body map[string]any, credential credential) (any, error) {
-	if request.StreamID == "" {
-		return nil, fail(500, "stream_id_missing", "executor.execute_stream requires stream_id")
-	}
-	// 宿主 stream.close 只接受错误字符串；先验证再返回，保留 RPC HTTP 状态。
-	_, response, _, err := s.executeResponse(request, body, credential, true)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		payload := map[string]any{"stream_id": request.StreamID}
-		for _, frame := range executorStreamPayloads(request.Format, response) {
-			if emitErr := s.call("host.stream.emit", map[string]any{"stream_id": request.StreamID, "payload": frame}, nil); emitErr != nil {
-				payload["error"] = "client disconnected while receiving stream"
-				break
-			}
-		}
-		_ = s.call("host.stream.close", payload, nil)
-	}()
-	return map[string]any{"Headers": map[string][]string{"Content-Type": {"text/event-stream"}, "Cache-Control": {"no-cache"}}}, nil
 }
 
 func (s *Service) status() map[string]any {
@@ -285,7 +241,7 @@ func registration(cfg Config) map[string]any {
 				{"Name": "max_response_bytes", "Type": "integer", "Description": "Maximum upstream response size."},
 				{"Name": "auth_mode", "Type": "string", "Description": "Basis Points authentication mode; normally chatgpt."},
 				{"Name": "tools_version_id", "Type": "string", "Description": "Optional authoritative Basis Points tools catalog version."},
-				{"Name": "incremental_text_stream", "Type": "boolean", "Description": "EXPERIMENTAL: forward message deltas; buffer tools through terminal validation; no automatic replay."},
+				{"Name": "incremental_text_stream", "Type": "boolean", "Description": "Forward message deltas (default true); false buffers the full response. Tools always wait for terminal validation."},
 				{"Name": "ignore_fast_tier", "Type": "boolean", "Description": "Accept Fast/priority as standard service on Basis Points only; does not enable upstream Fast."},
 				{"Name": "default_compact_threshold", "Type": "integer", "Description": "Positive fallback token threshold for explicitly requested compaction with an omitted/null threshold; default 200000. Does not enable compaction when absent."},
 			},

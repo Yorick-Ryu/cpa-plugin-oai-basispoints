@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	Version        = "0.1.15-stream-draft.4"
+	Version        = "0.1.19-alpha.1"
 	Provider       = "oai-basispoints"
 	AuthProviderID = "codex"
 	PluginID       = Provider
@@ -128,6 +128,7 @@ type Config struct {
 
 func defaultConfig() Config {
 	return Config{
+		IncrementalTextStream:   true,
 		DataDir:                 "plugins/oai-basispoints-data",
 		ResponsesURL:            DefaultResponsesURL,
 		UpstreamModel:           DefaultUpstreamModel,

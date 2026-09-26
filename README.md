@@ -30,7 +30,9 @@ plugins:
 3. CPA 的 `auth-dir` 中已有的 `type: codex` OAuth 文件会被插件识别；插件只在内存中读取 token，不生成另一份 token 文件。
 4. 客户端使用 Responses 协议调用 `gpt-6-astra-basispoints`。模型目录声明图像输入，以及 `low`、`medium`、`high`、`xhigh`、`max`、`ultra` 思考等级；`max` 映射为 `xhigh`，`ultra` 原样传递，未指定时默认 `medium`。
 
-插件的 `auth.parse` 会接管 CPA 中 `type: codex` 的 OAuth 文件，并为同一个文件展开两条内存认证：一条保留原生 `codex`，另一条是 `oai-basispoints` 虚拟认证。这样现有 Codex 模型继续使用 CPA 原生执行器，`gpt-6-astra-basispoints` 则使用本插件；不会生成或改写 OAuth 文件。原生 Codex 记录保留源 OAuth 元数据，供原生执行器读取访问令牌和刷新令牌。注意：当前 CPA 会把这两条记录都标记为虚拟认证，不持久化原生记录的刷新结果；Basis Points 记录也不会自动同步原生记录在内存中刷新的 JWT。源 JWT 过期时，需要先通过 CPA 更新或重新导入源 OAuth 凭据，再重新加载，单纯重载过期文件无效。流式响应遵循 Responses SSE 格式，但为保证工具调用可在完整 item 上做安全转换，当前会先读完上游 SSE 再回放给客户端，不是 token 级实时转发。
+插件的 `auth.parse` 会接管 CPA 中 `type: codex` 的 OAuth 文件，并为同一个文件展开两条内存认证：一条保留原生 `codex`，另一条是 `oai-basispoints` 虚拟认证。这样现有 Codex 模型继续使用 CPA 原生执行器，`gpt-6-astra-basispoints` 则使用本插件；不会生成或改写 OAuth 文件。原生 Codex 记录保留源 OAuth 元数据，供原生执行器读取访问令牌和刷新令牌。注意：当前 CPA 会把这两条记录都标记为虚拟认证，不持久化原生记录的刷新结果；Basis Points 记录也不会自动同步原生记录在内存中刷新的 JWT。源 JWT 过期时，需要先通过 CPA 更新或重新导入源 OAuth 凭据，再重新加载，单纯重载过期文件无效。
+
+v0.1.18 起，流式正文按上游 Responses SSE 增量交付，不再统一等到响应结束才回放；工具调用仍等待完整终态及整批校验。该优化不能消除上游生成首段之前的等待，也不会把一次性 JSON 或仅包含终态的上游响应伪装成逐字流式。本地及真实部署的验证边界见 [验测报告](docs/validation/v0.1.18.md)。
 
 ## 构建
 
@@ -42,12 +44,18 @@ make build
 ## 协议边界
 
 - `alpha_search_same_account: true` 为 Basis Points 模型别名恢复独立 `/v1/alpha/search`。成功推理后，搜索使用同会话的原始账号；未绑定或过期会话明确失败，不会借用其他/Free 账号。要求支持 Alpha Search 模型路由的 CPA，以及宿主 `force-model-prefix: false`。会话绑定只保存哈希、账号路由前缀和时间，保留 24 小时；配置可写 `data_dir` 可跨热加载保留。
-- Codex 标题生成兼容 `thread_title` 与 `codex_output_schema` 两种 schema 名称；仅匹配标题对象结构，返回有效的 `{"title":"..."}`，其他结构化输出请求保持原有行为。
+- Codex 标题生成兼容 `thread_title` 与 `codex_output_schema` 两种 schema 名称；仅匹配标题对象结构，返回有效的 `{"title":"..."}`，其他结构化输出仍按下述协议边界拒绝。
 - 客户端显式发送 `context_management: [{"type":"compaction"}]`，且 `compact_threshold` 缺失或为 `null` 时，插件补入 `default_compact_threshold`（默认 200000 token，可配置正整数）。这是插件兼容策略，不是模型容量或上游默认值。客户端明确阈值原样保留；未提供策略、`null` 或空数组不会开启压缩。
+- Codex 模型目录为本插件别名同步对应规范模型的 `apply_patch_tool_type`，保留缺失与空值语义。更新后需让 Codex 刷新模型目录，再用新会话验测原生补丁及差异入口；不回填历史会话事件。
+- 客户端实验工具仅按对应规范模型开放已接入的时钟和异步提问；不声明尚未实现密文消息契约的多代理 v2。旧缓存或显式启用 v2 的请求若包含代理密文会明确返回 400，不会强转明文。不会批量复制 Code Mode、审核策略或未知实验工具，也不会改写客户端个人配置。
+- 除上述 Codex 标题兼容外，结构化 `text.format`（`json_object` / `json_schema`）尚未实现，显式返回 400；不丢弃 Schema 后返回普通正文冒充成功。`text.verbosity` 的上游映射仍未实现，本版保留既有行为以避免默认请求回归，不宣称详细程度参数已生效。
+
 - 上游请求始终带 `Authorization: Bearer <access_token>`、`chatgpt-account-id`、`x-openai-account-id` 和 `x-basispoints-auth-mode: chatgpt`。
 - `turn_id` 按会话和当前用户 turn 稳定生成；工具结果回合只递增 `agent_iteration`，不会把同一 turn 重新当成新计划。
 - 工具中继通过外层 `references: [完整工具名]` 路由，`code` 只承载该工具的载荷：function 工具为参数 JSON 对象，custom 工具为逐字保留的原始文本。不要再套 `{tool,args}` 内层包装；插件不执行其中代码。已有会话的原生历史调用原样回放，新调用按本次注入的协议生成。
-- 非法函数 JSON、目录外工具或不符合 schema 的参数仍严格拒绝，最多重新生成一次，失败返回 422；不猜测修补引号、不丢弃坏调用，也不将失败响应部分交付。
+- 非法函数 JSON、目录外工具或不符合 schema 的参数仍严格拒绝，不猜测修补引号、不丢弃坏调用，也不交付半批工具。非流式或尚未交付正文的请求保留最多一次重生成，最终工具格式失败返回 422。
+- 已交付正文后发生工具校验失败、上游失败或截断时，保留已交付正文并发送明确的协议 `error`，不再重跑该请求，不发送成功终态；已提交的 HTTP 200 无法改为 422/502。客户端需检查流内事件，而不只检查 HTTP 状态。客户端自行重连或另发非流式请求不受插件控制。
+- 保留文本空白、消息和内容索引、最终用量及完成/截断状态；断开连接时关闭上游，插件停用时取消并等待活动流退出。该路径不改变原生工具身份回放、补丁内容及 Codex/Claude 格式转换规则。
 - 未能从 OAuth JWT 或凭据字段得到账号 ID、token 过期、上游返回非 2xx、工具名不在客户端目录中时，插件会报告明确错误，不伪造成功。
 
 ---
@@ -62,24 +70,13 @@ make build
   <img src="docs/assets/linuxdo.png" alt="LINUX DO 社区" width="360" />
 </a>
 
-## Experimental incremental text draft
+## 本分支兼容与版本管理
 
-The opt-in incremental_text_stream setting (default false) forwards ordinary
-message text as received. Tool calls remain buffered until the complete terminal
-response passes tool-name, argument-schema, call-ID and parallel-call validation.
-Thread-title requests keep the existing buffered path. The incremental path does
-not automatically replay failed requests; client retries still need idempotency
-for tools with side effects. Interrupted streams may have already displayed text.
+`incremental_text_stream` 默认开启，使用上游 v0.1.18 的增量流实现。
+显式设置 `false`（包括已持久化的旧设置）会等待完整响应校验后再交付；
+Codex 标题请求始终缓冲，以返回完整有效的标题 JSON。
+成功终态交付前绑定同账号 Alpha Search；失败响应不会建立绑定。
+流式和非流式均保留正常用量及缓存读取量，去除额外缓存写入细分字段。
 
-Draft 0.1.15-stream-draft.4 is based on commit
-70e8f95da694abba90d70fa34e52ce2aa507bbc1 (0.1.14-dmit.6.search.1),
-preserving its JPEG, compaction, title and same-account Alpha Search fixes.
-Validated incremental responses bind Alpha Search before the terminal event is
-delivered. Invalid tool relays retain their 422 error classification across the
-host stream bridge so they do not inadvertently cool the account.
-
-Validate with go test -race ./... and go vet ./... . Earlier draft.3 passed
-isolated CPA HTTP/SSE and WS fixtures, including nine tool/error scenarios;
-those fixture results are not a real-model benchmark or validation of this
-rebased binary. This is a source-only experimental branch, not a production
-deployment.
+本分支版本与上游版本分开记录，遵循 [版本与分支规范](docs/versioning.md)。
+合并代码及本地检查不代表生产部署或原始长上下文故障已验证修复。
