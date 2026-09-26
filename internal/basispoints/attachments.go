@@ -182,7 +182,11 @@ func (s *Service) uploadImage(request ExecutorRequest, endpoint string, image in
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	filename := "image"
-	if extensions, _ := mime.ExtensionsByType(image.mediaType); len(extensions) > 0 {
+	// Basis Points rejects JPEG aliases such as .jfif and .jpe during inference.
+	// Use a supported suffix instead of the host MIME database's first alias.
+	if image.mediaType == "image/jpeg" {
+		filename += ".jpg"
+	} else if extensions, _ := mime.ExtensionsByType(image.mediaType); len(extensions) > 0 {
 		filename += extensions[0]
 	}
 	partHeaders := make(textproto.MIMEHeader)
