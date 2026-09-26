@@ -886,7 +886,11 @@ func transformResponseBody(body []byte, source map[string]any) ([]byte, map[stri
 func isThreadTitleRequest(source map[string]any) bool {
 	text := objectValue(source["text"])
 	format := objectValue(text["format"])
-	if stringValue(format["type"]) != "json_schema" || stringValue(format["name"]) != "thread_title" {
+	if stringValue(format["type"]) != "json_schema" {
+		return false
+	}
+	name := stringValue(format["name"])
+	if name != "thread_title" && name != "codex_output_schema" {
 		return false
 	}
 	schema := objectValue(format["schema"])

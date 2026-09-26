@@ -241,5 +241,5 @@ func upstreamRequestError(status int, raw []byte, body map[string]any, c credent
 			tier = "invalid"
 		}
 	}
-	return fail(status, "upstream_error", fmt.Sprintf("Basis Points HTTP %d: %s (reasoning_effort=%s; service_tier=%s; input_images=%d; original_detail_images=%d)", status, message, stringValue(body["reasoning_effort"]), tier, images, originalDetails))
+	return fail(status, "upstream_error", fmt.Sprintf("Basis Points HTTP %d: %s (reasoning_effort=%s; service_tier=%s; input_images=%d; original_detail_images=%d; %s)", status, message, stringValue(body["reasoning_effort"]), tier, images, originalDetails, requestShape(body)))
 }

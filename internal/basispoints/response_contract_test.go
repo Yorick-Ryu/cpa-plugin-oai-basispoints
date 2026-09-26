@@ -64,7 +64,7 @@ func TestRelayRegenerationHTTP(t *testing.T) {
 					if strings.HasSuffix(mode, "exhausted") || (strings.HasSuffix(mode, "recover") && attempts == 1) {
 						native = bad
 					}
-					response := map[string]any{"id": "resp_local_fixture", "status": "completed", "output": []any{native}, "usage": map[string]any{"total_tokens": 17}}
+					response := map[string]any{"id": "resp_local_fixture", "status": "completed", "output": []any{native}, "usage": map[string]any{"input_tokens": 12, "output_tokens": 5, "total_tokens": 17, "cache_creation_input_tokens": 4, "input_tokens_details": map[string]any{"cached_tokens": 3, "cache_write_tokens": 4}}}
 					w.Header().Set("X-Request-Id", "local-http-fixture")
 					if stream || mode == "nonstream_sse" {
 						w.Header().Set("Content-Type", "text/event-stream")
@@ -174,6 +174,17 @@ func TestRelayRegenerationHTTP(t *testing.T) {
 					}
 				} else {
 					response, _ = rawObject(result.(map[string]any)["Payload"].([]byte))
+				}
+				usage := objectValue(response["usage"])
+				details := objectValue(usage["input_tokens_details"])
+				if _, ok := usage["cache_creation_input_tokens"]; ok {
+					t.Fatal("cache creation leaked")
+				}
+				if _, ok := details["cache_write_tokens"]; ok {
+					t.Fatal("cache write leaked")
+				}
+				if fmt.Sprint(usage["input_tokens"]) != "12" || fmt.Sprint(usage["output_tokens"]) != "5" || fmt.Sprint(usage["total_tokens"]) != "17" || fmt.Sprint(details["cached_tokens"]) != "3" {
+					t.Fatal("normal usage changed")
 				}
 				call := objectValue(response["output"].([]any)[0])
 				if call["type"] != "custom_tool_call" || call["input"] != patch {

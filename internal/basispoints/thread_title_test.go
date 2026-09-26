@@ -7,8 +7,12 @@ import (
 )
 
 func threadTitleSource() map[string]any {
+	return threadTitleSourceNamed("thread_title")
+}
+
+func threadTitleSourceNamed(name string) map[string]any {
 	return map[string]any{"text": map[string]any{"format": map[string]any{
-		"type": "json_schema", "name": "thread_title",
+		"type": "json_schema", "name": name,
 		"schema": map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}, "required": []any{"title"}, "additionalProperties": false},
 	}}}
 }
@@ -51,8 +55,10 @@ func TestThreadTitleFormattingIsScoped(t *testing.T) {
 	if err != nil || string(body) != string(plain) {
 		t.Fatalf("ordinary response changed: %v", err)
 	}
-	if !isThreadTitleRequest(threadTitleSource()) {
-		t.Fatal("Codex title schema not recognized")
+	for _, name := range []string{"thread_title", "codex_output_schema"} {
+		if !isThreadTitleRequest(threadTitleSourceNamed(name)) {
+			t.Fatalf("Codex title schema %q not recognized", name)
+		}
 	}
 	source := threadTitleSource()
 	source["text"].(map[string]any)["format"].(map[string]any)["name"] = "other"

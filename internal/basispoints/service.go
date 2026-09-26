@@ -12,11 +12,12 @@ import (
 )
 
 type Service struct {
-	attachments attachmentCache
-	mu          sync.RWMutex
-	cfg         Config
-	host        HostCall
-	stopped     bool
+	searchAccounts searchAccountBindings
+	attachments    attachmentCache
+	mu             sync.RWMutex
+	cfg            Config
+	host           HostCall
+	stopped        bool
 }
 
 func NewService() *Service {
@@ -94,8 +95,10 @@ func (s *Service) Handle(method string, raw json.RawMessage) (any, error) {
 		return map[string]any{"identifier": AuthProviderID}, nil
 	case "executor.identifier":
 		return map[string]any{"identifier": Provider}, nil
+	case "model.route":
+		return s.routeAlphaSearch(raw)
 	case "auth.parse":
-		return authParseWithAllowedEmails(raw, s.config().AllowedEmails)
+		return s.parseSearchAccounts(raw)
 	case "auth.login.start":
 		return nil, fail(400, "login_unavailable", "Import an existing CPA codex OAuth credential; interactive login is not used")
 	case "auth.login.poll":
@@ -185,6 +188,7 @@ func (s *Service) executeResponse(request ExecutorRequest, body map[string]any, 
 		if parseErr != nil {
 			return nil, nil, nil, parseErr
 		}
+		stripCacheCreationUsage(response)
 		payload, transformed, _, transformErr := transformResponseBody(jsonBytes(response), source)
 		if transformErr == nil {
 			// 结果已重新编码，不能继续使用上游 SSE/压缩/长度等实体头。
@@ -196,6 +200,7 @@ func (s *Service) executeResponse(request ExecutorRequest, body map[string]any, 
 			for _, name := range []string{"Content-Length", "Content-Encoding", "Transfer-Encoding", "ETag"} {
 				resultHeaders.Del(name)
 			}
+			s.rememberSearchAccount(request, credential)
 			return payload, transformed, resultHeaders, nil
 		}
 		var apiError *APIError
@@ -261,6 +266,7 @@ func registration(cfg Config) map[string]any {
 			"GitHubRepository": "https://github.com/JaxsonWang/cpa-plugin-oai-basispoints",
 			"Description":      "CPA Responses adapter for bps.openai.com with safe client-tool relay",
 			"ConfigFields": []map[string]any{
+				{"Name": "alpha_search_same_account", "Type": "boolean", "Description": "Route Alpha Search through the same account used for the Basis Points session."},
 				{"Name": "responses_url", "Type": "string", "Description": "Basis Points Responses endpoint."},
 				{"Name": "upstream_model", "Type": "string", "Description": "未单独配置 model_mappings 的别名使用的上游模型。"},
 				{"Name": "models", "Type": "array", "Description": "启用的客户端模型别名列表，数量不限。"},
@@ -274,6 +280,7 @@ func registration(cfg Config) map[string]any {
 			},
 		},
 		"capabilities": map[string]any{
+			"model_router":            cfg.AlphaSearchSameAccount,
 			"auth_provider":           true,
 			"model_provider":          true,
 			"executor":                true,

@@ -41,6 +41,8 @@ make build
 
 ## 协议边界
 
+- `alpha_search_same_account: true` 为 Basis Points 模型别名恢复独立 `/v1/alpha/search`。成功推理后，搜索使用同会话的原始账号；未绑定或过期会话明确失败，不会借用其他/Free 账号。要求支持 Alpha Search 模型路由的 CPA，以及宿主 `force-model-prefix: false`。会话绑定只保存哈希、账号路由前缀和时间，保留 24 小时；配置可写 `data_dir` 可跨热加载保留。
+- Codex 标题生成兼容 `thread_title` 与 `codex_output_schema` 两种 schema 名称；仅匹配标题对象结构，返回有效的 `{"title":"..."}`，其他结构化输出请求保持原有行为。
 - 客户端显式发送 `context_management: [{"type":"compaction"}]`，且 `compact_threshold` 缺失或为 `null` 时，插件补入 `default_compact_threshold`（默认 200000 token，可配置正整数）。这是插件兼容策略，不是模型容量或上游默认值。客户端明确阈值原样保留；未提供策略、`null` 或空数组不会开启压缩。
 - 上游请求始终带 `Authorization: Bearer <access_token>`、`chatgpt-account-id`、`x-openai-account-id` 和 `x-basispoints-auth-mode: chatgpt`。
 - `turn_id` 按会话和当前用户 turn 稳定生成；工具结果回合只递增 `agent_iteration`，不会把同一 turn 重新当成新计划。

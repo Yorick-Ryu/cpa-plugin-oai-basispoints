@@ -30,15 +30,20 @@ func (s *Service) interceptModelCatalog(raw json.RawMessage) (any, error) {
 		request.Model != "" || request.RequestedModel != "" || len(request.OriginalRequest) != 0 || len(request.RequestBody) != 0 {
 		return map[string]any{}, nil
 	}
+	cfg := s.config()
+	pruned, searchRoutesHidden := hideSearchRoutes(request.Body, cfg.AlphaSearchSameAccount)
+	request.Body = pruned
 	var catalog map[string]json.RawMessage
 	if json.Unmarshal(request.Body, &catalog) != nil {
 		return map[string]any{}, nil
 	}
 	var entries []json.RawMessage
 	if json.Unmarshal(catalog["models"], &entries) != nil || len(entries) == 0 {
+		if searchRoutesHidden {
+			return map[string]any{"Body": request.Body}, nil
+		}
 		return map[string]any{}, nil
 	}
-	cfg := s.config()
 	models := make([]map[string]json.RawMessage, len(entries))
 	bySlug := make(map[string]map[string]json.RawMessage, len(entries))
 	for i, entry := range entries {
@@ -50,7 +55,7 @@ func (s *Service) interceptModelCatalog(raw json.RawMessage) (any, error) {
 			bySlug[slug] = models[i]
 		}
 	}
-	changed := false
+	changed := searchRoutesHidden
 	for i, model := range models {
 		var slug string
 		if json.Unmarshal(model["slug"], &slug) != nil {
